@@ -14,6 +14,8 @@ local demand = require("luai").demand
 
 -- --{{{ Print all odd values
 -- demand('luai.demo').print_all_odd_values_in_table { t = { 1, 2, 3, 4, 5 } }
+-- demand('luai.demo').open_a_new_window_and_say { message = "hi react miami" }
+demand('luai.demo').change_omarchy_theme { theme = 'gruvbox' }
 -- --}}}
 
 
@@ -176,7 +178,7 @@ local demand = require("luai").demand
 
 -- --{{{ And even knows plugins!
 -- demand("luai.demo").telescope_picker_search_neovim_config {}
---
+
 -- --}}}
 
 
@@ -218,6 +220,8 @@ local demand = require("luai").demand
 
 --}}}
 
+
+-- demand("luai.demo").open_floating_terminal_sshed_to_terminal_dot_shop {}
 
 
 

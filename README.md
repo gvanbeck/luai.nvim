@@ -4,23 +4,86 @@ Generate, Demand, and Improve Lua Functions on the fly.
 
 ## Setup
 
-`luai.nvim` now uses the local Cursor Agent CLI for generation. Make sure `agent` is installed, available on your `PATH`, and already authenticated before using the plugin.
+`luai.nvim` no longer talks to any single CLI agent. You configure one or more **providers** in `setup{}`, give one a default key, and `luai` will dispatch generation through them.
+
+### Example — Claude Code
 
 ```lua
+local providers = require "luai.providers"
+
 require("luai").setup {
-  model = "composer-2-fast",
+  providers = {
+    default = providers.claude_code { model = "sonnet" },
+    fast    = providers.claude_code { model = "haiku" },
+  },
+  default_provider = "default",
 }
 ```
 
-Internally, `luai.nvim` invokes Cursor Agent in headless ask mode and consumes JSON output:
+This shells out to:
+
+```bash
+claude -p --output-format json --model sonnet "<prompt>"
+```
+
+and reads `.result` from the JSON response, which must contain Lua code that starts with `return function(opts)` and ends with `end`.
+
+### Example — Cursor Agent
+
+```lua
+local providers = require "luai.providers"
+
+require("luai").setup {
+  providers = {
+    default = providers.cursor_agent { model = "composer-2-fast" },
+  },
+  default_provider = "default",
+}
+```
+
+This shells out to:
 
 ```bash
 agent -p --mode ask --output-format json --model composer-2-fast --trust --workspace "$PWD" "<prompt>"
 ```
 
-The plugin reads the `.result` field from that JSON response and expects raw Lua code that starts with `return function(opts)` and ends with `end`.
-If the agent accidentally returns fenced Lua or a small amount of prose before the code, `luai.nvim` will try to normalize that automatically.
-You can override the default model for any single generation by passing `__model` in the opts table, for example `generate.some_fn { __model = "gpt-5.4-medium-fast" }`.
+### Example — any other CLI agent
+
+`luai.providers.cli` wraps any CLI that takes a prompt as an argv element and prints the response on stdout:
+
+```lua
+local providers = require "luai.providers"
+
+local aichat = providers.cli {
+  name = "aichat",
+  cmd = function(prompt, _opts) return { "aichat", "--no-stream", prompt } end,
+  -- parse_response is optional; default returns stdout unchanged.
+}
+
+require("luai").setup {
+  providers = { default = aichat },
+  default_provider = "default",
+}
+```
+
+A provider is just a function `(prompt, opts) -> raw_text`, so you can write one inline if you prefer.
+
+### Per-call overrides
+
+- `__provider = "fast"` in an opts table switches to a named provider for one call.
+- `__model = "opus"` is forwarded to the provider; the built-in `cursor_agent` and `claude_code` honour it.
+
+```lua
+demand("custom.utils").create_floating_window {
+  __provider = "fast",
+  __model = "haiku",
+  title = "Hello",
+}
+```
+
+If you call any luai entry point before configuring providers, you'll get `[luai] no providers configured. Pass providers = {...} to setup().`
+
+`luai.nvim` normalises and validates the provider's response — code fences, `<lua_function>` tags, and small amounts of leading prose are tolerated as long as the body parses with `loadstring`.
 
 ## Usage
 

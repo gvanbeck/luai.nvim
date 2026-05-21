@@ -79,7 +79,7 @@ end
 local normalize_generated_code = function(response_text)
   local normalized = vim.trim(response_text)
   if normalized == "" then
-    error "[luai] Cursor Agent returned an empty response."
+    error "[luai] provider returned an empty response."
   end
 
   local candidates = { normalized }
@@ -117,7 +117,7 @@ local normalize_generated_code = function(response_text)
   end
 
   error(string.format(
-    "[luai] Cursor Agent response did not contain valid Lua starting with `return function(opts)`:\n%s",
+    "[luai] provider response did not contain valid Lua starting with `return function(opts)`:\n%s",
     response_text
   ))
 end

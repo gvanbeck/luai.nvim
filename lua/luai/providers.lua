@@ -2,6 +2,19 @@
 
 local M = {}
 
+local function json_result(provider_name)
+  return function(stdout, _stderr, _code)
+    local ok, decoded = pcall(vim.json.decode, stdout)
+    if not ok then
+      error(string.format("[luai] %s: invalid JSON response:\n%s", provider_name, stdout))
+    end
+    if type(decoded) ~= "table" or type(decoded.result) ~= "string" then
+      error(string.format("[luai] %s: JSON did not contain a string `result` field:\n%s", provider_name, stdout))
+    end
+    return decoded.result
+  end
+end
+
 ---@param spec { name: string, cmd: string[]|fun(prompt: string, opts: table): string[], parse_response?: fun(stdout: string, stderr: string, exit_code: integer): string, env?: table }
 ---@return luai.Provider
 function M.cli(spec)
@@ -38,10 +51,29 @@ function M.cli(spec)
   end
 end
 
----@param _spec table
+---@param spec { model: string }
 ---@return luai.Provider
-function M.cursor_agent(_spec)
-  error "luai.providers.cursor_agent: not implemented yet"
+function M.cursor_agent(spec)
+  assert(spec and type(spec.model) == "string", "luai.providers.cursor_agent: `model` is required")
+
+  return M.cli {
+    name = "cursor_agent",
+    cmd = function(prompt, opts)
+      local model = opts.__model or spec.model
+      local workspace = vim.uv.cwd() or vim.fn.getcwd()
+      return {
+        "agent",
+        "-p",
+        "--mode", "ask",
+        "--output-format", "json",
+        "--model", model,
+        "--trust",
+        "--workspace", workspace,
+        prompt,
+      }
+    end,
+    parse_response = json_result "cursor_agent",
+  }
 end
 
 ---@param _spec table

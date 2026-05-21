@@ -140,3 +140,94 @@ do
   assert(p("", {}) == "parsed", "parse_response result returned")
   print "PASS: cli parse_response"
 end
+
+-- Test: cursor_agent builds the documented argv and extracts .result.
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, _)
+    captured_argv = argv
+    return {
+      wait = function()
+        return {
+          code = 0,
+          stdout = '{"result": "return function(opts) end"}',
+          stderr = "",
+        }
+      end,
+    }
+  end
+
+  local p = providers.cursor_agent { model = "composer-2-fast" }
+  local result = p("my prompt", {})
+  assert(result == "return function(opts) end", "extracts .result")
+
+  assert(captured_argv[1] == "agent", "argv[1] == 'agent'")
+  assert(vim.list_contains(captured_argv, "-p"))
+  assert(vim.list_contains(captured_argv, "--mode"))
+  assert(vim.list_contains(captured_argv, "ask"))
+  assert(vim.list_contains(captured_argv, "--output-format"))
+  assert(vim.list_contains(captured_argv, "json"))
+  assert(vim.list_contains(captured_argv, "--model"))
+  assert(vim.list_contains(captured_argv, "composer-2-fast"))
+  assert(vim.list_contains(captured_argv, "--trust"))
+  assert(vim.list_contains(captured_argv, "--workspace"))
+  assert(captured_argv[#captured_argv] == "my prompt", "prompt is the last argv element")
+  print "PASS: cursor_agent argv + JSON parse"
+end
+
+-- Test: opts.__model overrides the default model.
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, _)
+    captured_argv = argv
+    return {
+      wait = function()
+        return { code = 0, stdout = '{"result":"x"}', stderr = "" }
+      end,
+    }
+  end
+
+  local p = providers.cursor_agent { model = "composer-2-fast" }
+  p("prompt", { __model = "gpt-5.4-medium-fast" })
+  assert(vim.list_contains(captured_argv, "gpt-5.4-medium-fast"))
+  assert(not vim.list_contains(captured_argv, "composer-2-fast"))
+  print "PASS: cursor_agent __model override"
+end
+
+-- Test: invalid JSON from the agent surfaces a clear provider-named error.
+do
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(_, _)
+    return {
+      wait = function()
+        return { code = 0, stdout = "not json at all", stderr = "" }
+      end,
+    }
+  end
+
+  local p = providers.cursor_agent { model = "composer-2-fast" }
+  local ok, err = pcall(p, "", {})
+  assert(not ok)
+  assert(err:match "cursor_agent: invalid JSON", "error names provider + says invalid JSON: " .. tostring(err))
+  print "PASS: cursor_agent invalid JSON errors"
+end
+
+-- Test: JSON without a string `.result` field surfaces a clear error.
+do
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(_, _)
+    return {
+      wait = function()
+        return { code = 0, stdout = '{"other":"x"}', stderr = "" }
+      end,
+    }
+  end
+
+  local p = providers.cursor_agent { model = "composer-2-fast" }
+  local ok, err = pcall(p, "", {})
+  assert(not ok)
+  assert(err:match "result", "error mentions the missing field: " .. tostring(err))
+  print "PASS: cursor_agent missing .result errors"
+end

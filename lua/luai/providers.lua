@@ -76,10 +76,25 @@ function M.cursor_agent(spec)
   }
 end
 
----@param _spec table
+---@param spec { model: string }
 ---@return luai.Provider
-function M.claude_code(_spec)
-  error "luai.providers.claude_code: not implemented yet"
+function M.claude_code(spec)
+  assert(spec and type(spec.model) == "string", "luai.providers.claude_code: `model` is required")
+
+  return M.cli {
+    name = "claude_code",
+    cmd = function(prompt, opts)
+      local model = opts.__model or spec.model
+      return {
+        "claude",
+        "-p",
+        "--output-format", "json",
+        "--model", model,
+        prompt,
+      }
+    end,
+    parse_response = json_result "claude_code",
+  }
 end
 
 return M

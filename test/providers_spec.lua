@@ -231,3 +231,54 @@ do
   assert(err:match "result", "error mentions the missing field: " .. tostring(err))
   print "PASS: cursor_agent missing .result errors"
 end
+
+-- Test: claude_code builds expected argv and extracts .result.
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, _)
+    captured_argv = argv
+    return {
+      wait = function()
+        return {
+          code = 0,
+          stdout = '{"result":"return function(opts) end"}',
+          stderr = "",
+        }
+      end,
+    }
+  end
+
+  local p = providers.claude_code { model = "sonnet" }
+  local result = p("my prompt", {})
+  assert(result == "return function(opts) end")
+
+  assert(captured_argv[1] == "claude")
+  assert(vim.list_contains(captured_argv, "-p"))
+  assert(vim.list_contains(captured_argv, "--output-format"))
+  assert(vim.list_contains(captured_argv, "json"))
+  assert(vim.list_contains(captured_argv, "--model"))
+  assert(vim.list_contains(captured_argv, "sonnet"))
+  assert(captured_argv[#captured_argv] == "my prompt", "prompt is last argv element")
+  print "PASS: claude_code argv + JSON parse"
+end
+
+-- Test: opts.__model overrides default model.
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, _)
+    captured_argv = argv
+    return {
+      wait = function()
+        return { code = 0, stdout = '{"result":"x"}', stderr = "" }
+      end,
+    }
+  end
+
+  local p = providers.claude_code { model = "sonnet" }
+  p("prompt", { __model = "opus" })
+  assert(vim.list_contains(captured_argv, "opus"))
+  assert(not vim.list_contains(captured_argv, "sonnet"))
+  print "PASS: claude_code __model override"
+end

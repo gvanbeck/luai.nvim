@@ -18,7 +18,10 @@ local path = require "luai.path"
 
 local M = {}
 local config = {
-  model = "composer-2-fast",
+  ---@type table<string, luai.Provider>
+  providers = {},
+  ---@type string
+  default_provider = "default",
 }
 
 -- Basepath for generated functions from luai, that are not from `demand(...)`
@@ -26,7 +29,8 @@ local basepath = vim.fs.joinpath(vim.fn.stdpath "data" --[[@as string]], "luai",
 vim.fn.mkdir(basepath, "p")
 
 ---@class luai.Settings
----@field model? string: Default Cursor Agent model. Defaults to `composer-2-fast`.
+---@field providers? table<string, luai.Provider>: Named provider registry. Required for generation.
+---@field default_provider? string: Key into `providers` used when `opts.__provider` is not set. Defaults to `"default"`.
 
 ---@class luai.GeneratedFunction
 ---@field function_name string
@@ -75,7 +79,7 @@ end
 local normalize_generated_code = function(response_text)
   local normalized = vim.trim(response_text)
   if normalized == "" then
-    error "[luai] Cursor Agent returned an empty response."
+    error "[luai] provider returned an empty response."
   end
 
   local candidates = { normalized }
@@ -113,60 +117,30 @@ local normalize_generated_code = function(response_text)
   end
 
   error(string.format(
-    "[luai] Cursor Agent response did not contain valid Lua starting with `return function(opts)`:\n%s",
+    "[luai] provider response did not contain valid Lua starting with `return function(opts)`:\n%s",
     response_text
   ))
 end
 
 ---@param prompt string
----@param model string
+---@param opts table: The user opts table, including `__provider` and other `__` control keys.
 ---@return string
-local request_generation = function(prompt, model)
-  if vim.fn.executable "agent" ~= 1 then
-    error "[luai] Could not find `agent` on PATH. Install Cursor Agent CLI and make sure it is available in your shell."
+local dispatch_to_provider = function(prompt, opts)
+  if not config.providers or next(config.providers) == nil then
+    error "[luai] no providers configured. Pass providers = {...} to setup()."
   end
 
-  local workspace = vim.uv.cwd() or vim.fn.getcwd()
-  local result = vim.system({
-    "agent",
-    "-p",
-    "--mode",
-    "ask",
-    "--output-format",
-    "json",
-    "--model",
-    model,
-    "--trust",
-    "--workspace",
-    workspace,
-    prompt,
-  }, { text = true }):wait()
-
-  local stdout = result.stdout or ""
-  local stderr = result.stderr or ""
-
-  if result.code ~= 0 then
-    stderr = vim.trim(stderr)
-    stdout = vim.trim(stdout)
-    local details = stderr ~= "" and stderr or stdout
-    if details ~= "" then
-      error(string.format("[luai] Cursor Agent request failed: %s", details))
-    end
-
-    error(string.format("[luai] Cursor Agent request failed with exit code %s", result.code))
+  local name = opts.__provider or config.default_provider
+  local provider = config.providers[name]
+  if type(provider) ~= "function" then
+    local available = table.concat(vim.tbl_keys(config.providers), ", ")
+    error(string.format("[luai] unknown provider: %s. Configured: %s", tostring(name), available))
   end
 
-  local ok, decoded = pcall(vim.json.decode, stdout)
-  if not ok then
-    error(string.format("[luai] Cursor Agent returned invalid JSON:\n%s", stdout))
-  end
-
-  if type(decoded) ~= "table" or type(decoded.result) ~= "string" then
-    error(string.format("[luai] Cursor Agent JSON did not contain a string `result` field:\n%s", stdout))
-  end
-
-  return decoded.result
+  return provider(prompt, opts)
 end
+
+M._dispatch_to_provider = dispatch_to_provider
 
 --- Get the generated file
 ---@param name string
@@ -246,8 +220,7 @@ local generate_new_function = function(opts)
   print("[luai] generating new function:", opts.function_name)
 
   local new_prompt = require "luai.prompt"(opts)
-  local model = opts.options.__model or config.model
-  local response_text = request_generation(new_prompt.prompt, model)
+  local response_text = dispatch_to_provider(new_prompt.prompt, opts.options)
   local implementation = normalize_generated_code(response_text)
 
   return {

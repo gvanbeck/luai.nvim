@@ -10,6 +10,19 @@ reload "luai.prompt"
 reload "luai.prompt.nvim_api"
 reload "luai.path"
 --}}}
+--{{{ Configure providers (NEW: agent-agnostic setup)
+reload "luai.providers"
+local providers = require "luai.providers"
+
+require("luai").setup {
+  providers = {
+    default = providers.claude_code { model = "sonnet" },
+    fast    = providers.claude_code { model = "haiku" },
+    cursor  = providers.cursor_agent { model = "composer-2-fast" },
+  },
+  default_provider = "default",
+}
+--}}}
 local demand = require("luai").demand
 
 -- --{{{ Print all odd values
@@ -17,6 +30,13 @@ local demand = require("luai").demand
 -- demand('luai.demo').open_a_new_window_and_say { message = "hi react miami" }
 demand('luai.demo').change_omarchy_theme { theme = 'gruvbox' }
 -- --}}}
+
+--{{{ Per-call provider override (uses `fast` model just for this call)
+-- demand("luai.demo").say_hello_with_fast_provider {
+--   __provider = "fast",
+--   __description = "Print 'hello from fast provider' using vim.notify",
+-- }
+--}}}
 
 
 

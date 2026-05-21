@@ -208,7 +208,9 @@ return setmetatable({
   )
 
   vim.fn.writefile(vim.split(file_contents, "\n"), options.filepath)
-  vim.system({ "stylua", options.filepath }):wait()
+  if vim.fn.executable "stylua" == 1 then
+    vim.system({ "stylua", options.filepath }):wait()
+  end
 
   print(string.format("[luai] wrote new updated file: %s", options.filepath))
 end

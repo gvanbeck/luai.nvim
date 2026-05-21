@@ -36,3 +36,33 @@ do
   assert(captured_opts.text == true, "vim.system called with text=true")
   print "PASS: cli static argv"
 end
+
+-- Test: cmd as function receives (prompt, opts) and its return value is the argv.
+do
+  local seen_prompt, seen_opts, captured_argv
+  vim.system = function(argv, _)
+    captured_argv = argv
+    return {
+      wait = function()
+        return { code = 0, stdout = "ok", stderr = "" }
+      end,
+    }
+  end
+  vim.fn.executable = function(_) return 1 end
+
+  local p = providers.cli {
+    name = "dyn",
+    cmd = function(prompt, opts)
+      seen_prompt = prompt
+      seen_opts = opts
+      return { "tool", "--prompt", prompt }
+    end,
+  }
+
+  p("hello", { x = 1 })
+  assert(seen_prompt == "hello", "prompt forwarded to cmd fn")
+  assert(seen_opts.x == 1, "opts forwarded to cmd fn")
+  assert(captured_argv[1] == "tool")
+  assert(captured_argv[3] == "hello")
+  print "PASS: cli dynamic argv"
+end

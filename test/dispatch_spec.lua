@@ -6,7 +6,7 @@ local luai = require "luai"
 
 -- Test: no providers configured -> clear error.
 do
-  luai.setup {}
+  luai.setup { providers = {} }
   local ok, err = pcall(luai._dispatch_to_provider, "prompt", {})
   assert(not ok, "dispatch must error when no providers configured")
   assert(err:match "no providers configured", "error mentions missing providers: " .. tostring(err))

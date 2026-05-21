@@ -2,10 +2,40 @@
 
 local M = {}
 
----@param _spec table
+---@param spec { name: string, cmd: string[]|fun(prompt: string, opts: table): string[], parse_response?: fun(stdout: string, stderr: string, exit_code: integer): string, env?: table }
 ---@return luai.Provider
-function M.cli(_spec)
-  error "luai.providers.cli: not implemented yet"
+function M.cli(spec)
+  assert(spec and type(spec.name) == "string", "luai.providers.cli: `name` is required")
+  assert(spec and spec.cmd, "luai.providers.cli: `cmd` is required")
+
+  return function(prompt, opts)
+    local argv = type(spec.cmd) == "function" and spec.cmd(prompt, opts) or spec.cmd
+    assert(type(argv) == "table" and argv[1], "luai.providers.cli: cmd must produce a non-empty argv list")
+
+    if vim.fn.executable(argv[1]) ~= 1 then
+      error(string.format("[luai] %s: command not on PATH: %s", spec.name, argv[1]))
+    end
+
+    local result = vim.system(argv, { text = true, env = spec.env }):wait()
+    local stdout = result.stdout or ""
+    local stderr = result.stderr or ""
+
+    if result.code ~= 0 then
+      local trimmed_err = vim.trim(stderr)
+      local trimmed_out = vim.trim(stdout)
+      local details = trimmed_err ~= "" and trimmed_err or trimmed_out
+      if details == "" then
+        details = "exit code " .. tostring(result.code)
+      end
+      error(string.format("[luai] %s failed: %s", spec.name, details))
+    end
+
+    if spec.parse_response then
+      return spec.parse_response(stdout, stderr, result.code)
+    end
+
+    return stdout
+  end
 end
 
 ---@param _spec table

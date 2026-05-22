@@ -44,3 +44,23 @@ do
   assert(result == "detailed", "got: " .. tostring(result))
   print "PASS: agent.ask_user choices via vim.ui.select"
 end
+
+-- Test: ask_user returns nil when vim.wait times out (60s with no response).
+do
+  local original_input = vim.ui.input
+  local original_wait = vim.wait
+  vim.ui.input = function(_opts, _cb)
+    -- Never invoke the callback so the predicate never becomes true.
+  end
+  vim.wait = function(_timeout, _predicate, _interval)
+    return false
+  end
+
+  local result = agent.ask_user "ignored"
+
+  vim.ui.input = original_input
+  vim.wait = original_wait
+
+  assert(result == nil, "timeout returns nil, got: " .. tostring(result))
+  print "PASS: agent.ask_user timeout returns nil"
+end

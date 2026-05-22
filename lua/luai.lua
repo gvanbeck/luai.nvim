@@ -519,9 +519,10 @@ end
 ---@param module string
 ---@return table
 M.improve = function(module)
+  local norm = normalize_module(module)
   return setmetatable({}, {
     __newindex = function(_, function_name, value)
-      local generated_filepath = find_module(module, function_name)
+      local generated_filepath = module_to_path(norm, function_name)
       assert(vim.uv.fs_stat(generated_filepath), "generated function file must exist already")
 
       update_existing_generation(generated_filepath, function_name, value)

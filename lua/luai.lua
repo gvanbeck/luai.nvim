@@ -662,4 +662,49 @@ M._module_to_path = module_to_path
 M._namespace = namespace
 M._storage_root = storage_root
 
+---Run a generated function by name with auto-populated context opts.
+---@param name string: "fn" (shorthand for "<ns>.default.fn"), "module.fn", or fully-qualified "<ns>.module.fn"
+---@param ctx? { range_start?: integer, range_end?: integer, range_present?: boolean }
+M.run = function(name, ctx)
+  local module, fn = name:match "^(.+)%.([^.]+)$"
+  if not module then
+    module = normalize_module(nil) -- <ns>.default
+    fn = name
+  else
+    module = normalize_module(module)
+  end
+
+  local opts = require("luai.context").build_opts(ctx)
+  local mod = require(module)
+  if type(mod[fn]) ~= "function" then
+    error(string.format("[luai] function not found: %s.%s", module, fn))
+  end
+  mod[fn](opts)
+end
+
+---@param arglead string
+---@return string[]
+M.complete_function_names = function(arglead)
+  local ns = M._namespace()
+  local items = {}
+  for _, module_item in ipairs(M._get_generated_modules()) do
+    local module_sub = module_item.module:sub(#ns + 2) -- strip "<ns>." prefix
+    for _, fn_item in ipairs(M._get_generated_functions_for_module(module_item)) do
+      table.insert(items, module_sub .. "." .. fn_item.fn)
+      if module_sub == "default" then
+        table.insert(items, fn_item.fn)
+      end
+    end
+  end
+  table.sort(items)
+  if arglead == "" then return items end
+  local filtered = {}
+  for _, candidate in ipairs(items) do
+    if vim.startswith(candidate, arglead) then
+      table.insert(filtered, candidate)
+    end
+  end
+  return filtered
+end
+
 return M

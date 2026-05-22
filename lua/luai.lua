@@ -28,6 +28,54 @@ local config = {
 local basepath = vim.fs.joinpath(vim.fn.stdpath "data" --[[@as string]], "luai", "generated")
 vim.fn.mkdir(basepath, "p")
 
+local DEFAULT_MODULE = "luai.default"
+
+---@return string: the directory containing the active luai.nvim install (parent of /lua)
+local function luai_install_dir()
+  local paths = vim.api.nvim_get_runtime_file("lua/luai.lua", false)
+  if not paths or #paths == 0 then
+    error "[luai] cannot find luai install directory (lua/luai.lua not on runtimepath)"
+  end
+  return vim.fn.fnamemodify(paths[1], ":h:h")
+end
+
+---@return string: <install>/lua/luai — the root for all generated content
+local function luai_root()
+  return vim.fs.joinpath(luai_install_dir(), "lua", "luai")
+end
+
+---@param module? string
+---@return string: a module name guaranteed to start with "luai." (or be exactly "luai")
+local function normalize_module(module)
+  if module == nil or module == "" then
+    return DEFAULT_MODULE
+  end
+  if module == "luai" or vim.startswith(module, "luai.") then
+    return module
+  end
+  return "luai." .. module
+end
+
+---@param module string: normalized module (starts with "luai." or equals "luai")
+---@param file string: filename without extension (e.g. "init", "create_window")
+---@return string: absolute filepath under <luai_root>
+local function module_to_path(module, file)
+  local sub = module == "luai" and "" or module:sub(#"luai." + 1)
+  local parts = sub == "" and {} or vim.split(sub, ".", { plain = true })
+  table.insert(parts, file .. ".lua")
+  return vim.fs.joinpath(luai_root(), unpack(parts))
+end
+
+---Ensure the default module's init.lua exists so `require("luai.default.<fn>")` resolves.
+local function ensure_default_module()
+  local init_file = module_to_path(DEFAULT_MODULE, "init")
+  if not vim.uv.fs_stat(init_file) then
+    vim.fn.mkdir(vim.fn.fnamemodify(init_file, ":h"), "p")
+    local contents = string.format([[return require("luai")._require_init(%q)]], DEFAULT_MODULE)
+    vim.fn.writefile({ contents }, init_file)
+  end
+end
+
 ---@class luai.Settings
 ---@field providers? table<string, luai.Provider>: Named provider registry. Required for generation.
 ---@field default_provider? string: Key into `providers` used when `opts.__provider` is not set. Defaults to `"default"`.
@@ -628,5 +676,10 @@ end
 M._get_generated_modules = get_generated_modules
 M._get_generated_functions_for_module = get_generated_functions_for_module
 M._read_generated_file = read_generated_file
+
+-- Expose storage helpers for testing
+M._normalize_module = normalize_module
+M._module_to_path = module_to_path
+M._luai_root = luai_root
 
 return M

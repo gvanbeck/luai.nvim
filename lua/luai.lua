@@ -388,8 +388,7 @@ function Generated:__index(key)
   end
 
   -- Read things from disk, so we don't ask AI to generate every time
-  local generated_filepath = filepath
-  local result = read_generated_file(generated_filepath)
+  local result = read_generated_file(filepath)
   if result then
     local fn = result.implementation()
     cached[key] = {
@@ -632,7 +631,7 @@ end
 M.improve_select = function()
   local items = get_generated_modules()
   if vim.tbl_isempty(items) then
-    vim.notify "[luai] No generated modules found on runtimepath."
+    vim.notify "[luai] No generated modules found under the luai root."
     return
   end
 

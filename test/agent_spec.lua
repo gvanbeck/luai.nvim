@@ -93,3 +93,26 @@ do
   assert(close_called, "stream.close was invoked")
   print "PASS: agent.call delegates with corner-window opts and closes stream"
 end
+
+-- Test: agent.call without `prompt` errors with a clear message.
+do
+  local ok, err = pcall(agent.call, {})
+  assert(not ok, "should have errored")
+  assert(err:match "`prompt` is required", "error mentions missing prompt: " .. tostring(err))
+  print "PASS: agent.call requires prompt"
+end
+
+-- Test: agent.call propagates provider errors from dispatch.
+do
+  -- Override the stubbed luai module from the previous test with one that errors.
+  package.loaded["luai"] = {
+    _dispatch_to_provider = function(_prompt, _opts)
+      error "[luai] simulated provider failure"
+    end,
+  }
+
+  local ok, err = pcall(agent.call, { prompt = "x" })
+  assert(not ok)
+  assert(err:match "simulated provider failure", "error propagates: " .. tostring(err))
+  print "PASS: agent.call propagates provider errors"
+end

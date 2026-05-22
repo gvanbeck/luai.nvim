@@ -662,6 +662,9 @@ M._module_to_path = module_to_path
 M._namespace = namespace
 M._storage_root = storage_root
 
+---Public access to the context helper module.
+M.context = require "luai.context"
+
 ---Run a generated function by name with auto-populated context opts.
 ---@param name string: "fn" (shorthand for "<ns>.default.fn"), "module.fn", or fully-qualified "<ns>.module.fn"
 ---@param ctx? { range_start?: integer, range_end?: integer, range_present?: boolean }

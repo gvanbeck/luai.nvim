@@ -21,6 +21,7 @@ do
   assert(opts.line_number == 3, "line_number 3")
   assert(opts.line == "gamma", "line text matches, got: " .. tostring(opts.line))
   assert(opts.filetype == "lua", "filetype lua")
+  assert(type(opts.cfile) == "string", "cfile is a string (empty when nothing under cursor)")
   assert(opts.range == nil, "no range when not requested")
   assert(opts.selection == nil, "no selection when no range")
   print "PASS: build_opts populates basic context"

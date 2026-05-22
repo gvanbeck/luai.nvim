@@ -64,3 +64,32 @@ do
   assert(result == nil, "timeout returns nil, got: " .. tostring(result))
   print "PASS: agent.ask_user timeout returns nil"
 end
+
+-- Test: agent.call delegates to luai._dispatch_to_provider with __window = corner preset
+-- and closes the returned stream before returning the result.
+do
+  local captured_prompt, captured_opts, close_called
+  -- Stub luai to intercept dispatch.
+  package.loaded["luai"] = {
+    _dispatch_to_provider = function(prompt, opts)
+      captured_prompt = prompt
+      captured_opts = opts
+      return "model response", {
+        close = function() close_called = true end,
+      }
+    end,
+  }
+
+  local result = agent.call { prompt = "summarize this", provider = "fast" }
+
+  assert(result == "model response", "raw result returned, got: " .. tostring(result))
+  assert(captured_prompt == "summarize this", "prompt forwarded")
+  assert(captured_opts.__window, "__window opts present")
+  assert(captured_opts.__window.size == "corner", "size = corner")
+  assert(captured_opts.__window.focus == false, "focus = false")
+  assert(captured_opts.__window.winblend == 10, "winblend = 10")
+  assert(captured_opts.__provider == "fast", "provider key converted to __provider")
+  assert(captured_opts.provider == nil, "user-friendly `provider` removed")
+  assert(close_called, "stream.close was invoked")
+  print "PASS: agent.call delegates with corner-window opts and closes stream"
+end

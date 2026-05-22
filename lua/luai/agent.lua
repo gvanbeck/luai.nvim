@@ -14,7 +14,7 @@ function M.call(opts)
   call_opts.__window = { size = "corner", focus = false, winblend = 10 }
 
   local luai = require "luai"
-  local result, stream = luai._dispatch_to_provider(opts.prompt, call_opts)
+  local result, stream = luai._dispatch_to_provider(call_opts.prompt, call_opts)
   stream.close()
   return result
 end

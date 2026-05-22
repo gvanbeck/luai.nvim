@@ -2,10 +2,11 @@
 vim.opt.rtp:append "."
 
 -- Stub stream_win for all tests in this file (real impl tested separately).
-local stub_calls = { open = 0 }
+local stub_calls = { open = 0, last_opts = nil }
 package.loaded["luai.stream_win"] = {
-  open = function(_opts)
+  open = function(o)
     stub_calls.open = stub_calls.open + 1
+    stub_calls.last_opts = o
     return {
       win = 0,
       buf = 0,
@@ -123,4 +124,26 @@ do
   assert(type(stream.replace) == "function")
   assert(type(stream.close) == "function")
   print "PASS: dispatch opens stream and forwards __on_chunk"
+end
+
+-- Test: dispatch forwards opts.__window to stream_win.open.
+do
+  luai.setup {
+    providers = {
+      default = function(_, _) return "ok" end,
+    },
+    default_provider = "default",
+  }
+
+  stub_calls.last_opts = nil
+  luai._dispatch_to_provider("prompt", {
+    __window = { size = "corner", focus = false, winblend = 10 },
+  })
+
+  local opts = stub_calls.last_opts
+  assert(type(opts) == "table", "stream_win.open received opts table")
+  assert(opts.geometry and opts.geometry.size == "corner", "size = corner forwarded")
+  assert(opts.focus == false, "focus = false forwarded")
+  assert(opts.winblend == 10, "winblend = 10 forwarded")
+  print "PASS: dispatch forwards __window to stream_win.open"
 end

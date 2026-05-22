@@ -137,7 +137,13 @@ local dispatch_to_provider = function(prompt, opts)
     error(string.format("[luai] unknown provider: %s. Configured: %s", tostring(name), available))
   end
 
-  local stream = require("luai.stream_win").open { title = "luai: generating" }
+  local window_opts = opts.__window or {}
+  local stream = require("luai.stream_win").open {
+    title = "luai: generating",
+    geometry = { size = window_opts.size or "fullsize" },
+    focus = window_opts.focus,
+    winblend = window_opts.winblend,
+  }
   opts.__on_chunk = function(chunk) stream.append(chunk) end
 
   local ok, result = pcall(provider, prompt, opts)

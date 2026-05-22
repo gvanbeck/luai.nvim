@@ -142,3 +142,26 @@ This will open up a selection window for you to select from
 the generated modules on your runtimepath, then a second selection
 for the generated functions inside that module, and finally it will
 prompt you for what you want improved.
+
+### `agent` (for generated functions that call the LLM themselves)
+
+Generated functions that need to make their own LLM calls — for sub-tasks, refinements, or follow-up questions — can use the `luai.agent` helpers:
+
+```lua
+local agent = require "luai.agent"
+
+local result = agent.call {
+  prompt = "summarize the following: " .. text,
+  provider = "fast",   -- optional, defaults to your default_provider
+}
+
+-- Ask the user a follow-up before continuing.
+local choice = agent.ask_user("Use that summary?", { "yes", "no" })
+if choice == "no" then
+  return agent.call { prompt = "try again, more concise" }
+end
+```
+
+`agent.call` opens a small 70×12 floating window in the bottom-right corner showing the LLM's live stream. It does not steal focus and closes itself when the call completes. The returned string is the model's raw response (no Lua normalisation — use `M.generate` if you want code generated and stored on disk).
+
+`agent.ask_user(question)` returns the user's free-text answer. Pass a second argument with a list of strings to get a selection prompt instead. Returns `nil` on cancel or after 60 seconds without a response.

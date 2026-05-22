@@ -24,3 +24,23 @@ do
   assert(result == "user typed this", "got: " .. tostring(result))
   print "PASS: agent.ask_user free-text via vim.ui.input"
 end
+
+-- Test: ask_user with choices uses vim.ui.select and returns the selected choice.
+do
+  local captured_choices, captured_prompt
+  local original_select = vim.ui.select
+  vim.ui.select = function(items, opts, cb)
+    captured_choices = items
+    captured_prompt = opts.prompt
+    cb(items[2])
+  end
+
+  local result = agent.ask_user("Pick a style:", { "concise", "detailed", "bullets" })
+
+  vim.ui.select = original_select
+  assert(captured_prompt == "Pick a style:")
+  assert(captured_choices[1] == "concise")
+  assert(captured_choices[3] == "bullets")
+  assert(result == "detailed", "got: " .. tostring(result))
+  print "PASS: agent.ask_user choices via vim.ui.select"
+end

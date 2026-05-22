@@ -43,6 +43,7 @@ function M.open(opts)
 
   local function replace(lines)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.bo[buf].modifiable = false
     pcall(vim.cmd.redraw)
   end
 

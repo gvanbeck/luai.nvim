@@ -76,3 +76,12 @@ do
   assert(not vim.api.nvim_buf_is_valid(s.buf), "buffer is invalid after close")
   print "PASS: stream_win.close destroys win and buf"
 end
+
+-- Test: replace locks the buffer (nomodifiable) per spec.
+do
+  local s = stream_win.open {}
+  s.replace { "final code" }
+  assert(vim.bo[s.buf].modifiable == false, "buffer must be nomodifiable after replace")
+  s.close()
+  print "PASS: stream_win.replace locks buffer"
+end

@@ -178,3 +178,101 @@ do
   assert(beta_entry.display == "beta.noop", "no description -> display is just module.fn")
   print "PASS: entry_maker formats display and ordinal"
 end
+
+-- Test: selecting an entry invokes require(module)[fn](option_example) when example is present.
+do
+  local invoked_with
+  -- Stub the user-supplied module so we can capture the invocation.
+  package.loaded["alpha"] = {
+    do_thing = function(opts) invoked_with = opts end,
+  }
+
+  -- Capture the select_default action.
+  local captured_action_fn
+  package.loaded["telescope.actions"] = {
+    select_default = { replace = function(_, fn) captured_action_fn = fn end },
+    close = function() end,
+  }
+  -- Stub get_selected_entry to return a fake entry pointing at alpha.do_thing.
+  package.loaded["telescope.actions.state"] = {
+    get_selected_entry = function()
+      return {
+        value = {
+          module = "alpha",
+          fn = "do_thing",
+          path = "/p/alpha/do_thing.lua",
+          option_example = { x = 1, y = "two" },
+        },
+      }
+    end,
+  }
+
+  -- Reset the rest of the telescope stubs (carry over from Task 4).
+  package.loaded["telescope.pickers"] = {
+    new = function(_, cfg)
+      -- Trigger attach_mappings to install the action.
+      cfg.attach_mappings(0, function() end)
+      return { find = function() end }
+    end,
+  }
+  package.loaded["telescope.finders"] = { new_table = function(o) return o end }
+  package.loaded["telescope.config"] = { values = { generic_sorter = function() return "<sorter>" end } }
+  package.loaded["telescope.previewers"] = { new_buffer_previewer = function(o) return o end }
+  package.loaded["telescope"] = { register_extension = function(spec) return spec end }
+  package.loaded["telescope._extensions.luai"] = nil
+  local ext = require "telescope._extensions.luai"
+
+  ext.exports.run {}
+
+  assert(type(captured_action_fn) == "function", "select_default action captured")
+  -- Fire the action as if the user pressed <CR>.
+  captured_action_fn()
+
+  assert(invoked_with ~= nil, "alpha.do_thing was invoked")
+  assert(invoked_with.x == 1, "opts.x forwarded")
+  assert(invoked_with.y == "two", "opts.y forwarded")
+  print "PASS: selection invokes function with option_example"
+end
+
+-- Test: when option_example is nil, fall back to an empty table.
+do
+  local invoked_with
+  package.loaded["alpha"] = {
+    do_thing = function(opts) invoked_with = opts end,
+  }
+
+  local captured_action_fn
+  package.loaded["telescope.actions"] = {
+    select_default = { replace = function(_, fn) captured_action_fn = fn end },
+    close = function() end,
+  }
+  package.loaded["telescope.actions.state"] = {
+    get_selected_entry = function()
+      return {
+        value = {
+          module = "alpha",
+          fn = "do_thing",
+          path = "/p/alpha/do_thing.lua",
+          option_example = nil,
+        },
+      }
+    end,
+  }
+
+  package.loaded["telescope.pickers"] = {
+    new = function(_, cfg)
+      cfg.attach_mappings(0, function() end)
+      return { find = function() end }
+    end,
+  }
+  package.loaded["telescope"] = { register_extension = function(spec) return spec end }
+  package.loaded["telescope._extensions.luai"] = nil
+  local ext = require "telescope._extensions.luai"
+  ext.exports.run {}
+
+  captured_action_fn()
+
+  assert(type(invoked_with) == "table", "fallback opts is a table")
+  assert(next(invoked_with) == nil, "fallback opts is empty")
+  print "PASS: selection falls back to {} when option_example is nil"
+end

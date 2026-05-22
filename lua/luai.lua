@@ -24,10 +24,6 @@ local config = {
   default_provider = "default",
 }
 
--- Basepath for generated functions from luai, that are not from `demand(...)`
-local basepath = vim.fs.joinpath(vim.fn.stdpath "data" --[[@as string]], "luai", "generated")
-vim.fn.mkdir(basepath, "p")
-
 local DEFAULT_MODULE = "luai.default"
 
 ---@return string: the directory containing the active luai.nvim install (parent of /lua)
@@ -205,14 +201,6 @@ end
 
 M._dispatch_to_provider = dispatch_to_provider
 
---- Get the generated file
----@param name string
----@return string
-local get_generated_filepath = function(name)
-  ---@diagnostic disable-next-line: param-type-mismatch
-  return vim.fs.joinpath(basepath, name .. ".lua")
-end
-
 --- Read the generated file from disk
 ---@param filepath string: The path to the existing generated file
 ---@return luai.GeneratedFunction?
@@ -302,23 +290,6 @@ local generate_new_function = function(opts)
     option_example = new_prompt.option_example,
   }, stream
 end
-
-local function find_module(module, file)
-  local parts = vim.split(module, ".", { plain = true })
-  local paths = vim.api.nvim_get_runtime_file(vim.fs.joinpath("lua", parts[1]), true)
-  if #paths == 1 then
-    -- Replace the basepath
-    parts[1] = paths[1]
-
-    -- Append the file
-    table.insert(parts, file .. ".lua")
-    return vim.fs.joinpath(unpack(parts))
-  end
-
-  error "could not find module"
-end
-
-local function get_module_path(module) end
 
 ---@param options table
 ---@param latest_history luai.RawGeneratedFunctionResult

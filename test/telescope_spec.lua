@@ -276,3 +276,40 @@ do
   assert(next(invoked_with) == nil, "fallback opts is empty")
   print "PASS: selection falls back to {} when option_example is nil"
 end
+
+-- Test: build_items silently skips a corrupt file (one that makes _read_generated_file error)
+-- instead of aborting the whole listing.
+do
+  package.loaded["luai"] = {
+    _get_generated_modules = function()
+      return {
+        { module = "good", dir = "/p/good", init = "/p/good/init.lua" },
+        { module = "bad", dir = "/p/bad", init = "/p/bad/init.lua" },
+      }
+    end,
+    _get_generated_functions_for_module = function(m)
+      if m.module == "good" then
+        return { { module = "good", fn = "ok_fn", path = "/p/good/ok_fn.lua" } }
+      end
+      return { { module = "bad", fn = "broken_fn", path = "/p/bad/broken_fn.lua" } }
+    end,
+    _read_generated_file = function(path)
+      if path:find "broken_fn" then
+        error "corrupt file: simulated parse failure"
+      end
+      return {
+        history = { { option_example = { ok = true }, description = "good fn" } },
+      }
+    end,
+  }
+
+  package.loaded["telescope"] = { register_extension = function(spec) return spec end }
+  package.loaded["telescope._extensions.luai"] = nil
+  local ext = require "telescope._extensions.luai"
+  local items = ext._build_items()
+
+  assert(#items == 1, "only the readable function survives, got: " .. #items)
+  assert(items[1].module == "good")
+  assert(items[1].fn == "ok_fn")
+  print "PASS: build_items skips corrupt files"
+end

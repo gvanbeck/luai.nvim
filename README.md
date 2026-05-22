@@ -87,31 +87,57 @@ If you call any luai entry point before configuring providers, you'll get `[luai
 
 ### Where generated functions live
 
-All generated functions are stored under the active luai.nvim install directory at `<install>/lua/luai/<module>/<function>.lua`. luai resolves the install dir at runtime via `nvim_get_runtime_file("lua/luai.lua", false)`, so this works whether luai is loaded from a lazy.nvim clone, a manual `:set rtp+=` from a development checkout, or anywhere else on the runtimepath.
+All generated functions are stored under a user-owned path you control. The default is:
 
-Module names passed to `demand(...)` are auto-prefixed with `luai.` if absent:
-- `demand("demo")` → `<install>/lua/luai/demo/`
-- `demand("luai.demo")` → same path (no double-prefix)
-- `demand("foo.bar")` → `<install>/lua/luai/foo/bar/`
+```
+~/.config/nvim/lua/luai_user/<module>/<function>.lua
+```
 
-The `M.generate.fn(...)` API has no module, so its files land under the fallback module `luai.default` at `<install>/lua/luai/default/<fn>.lua`.
+Files there are part of your nvim config tree, so they're git-trackable in your dotfiles. The require namespace is derived from the path's last segment (`luai_user` by default), and functions resolve as `require("luai_user.<module>.<fn>")`.
 
-#### Migrating older files
+Override the location via `setup{}`:
 
-If you used a luai release that wrote `M.generate` files to `~/.local/share/nvim/luai/generated/`, those files are still on disk but no longer surfaced by luai. To bring them under the new root:
+```lua
+require("luai").setup {
+  user_storage = vim.fn.stdpath("config") .. "/lua/luai_user",  -- default
+  providers = { ... },
+  default_provider = "default",
+}
+```
+
+The path must end in `/lua/<namespace>` so the standard Lua module path resolves it (your nvim config dir is already on the runtimepath). Whatever you choose for `<namespace>` becomes the prefix users will type with `demand("<sub>")` (auto-prefixed to `<namespace>.<sub>`).
+
+Module names you pass to `demand(...)` are auto-prefixed with the namespace if absent:
+- `demand("demo")` → `~/.config/nvim/lua/luai_user/demo/`
+- `demand("luai_user.demo")` → same path (no double-prefix)
+- `demand("foo.bar")` → `~/.config/nvim/lua/luai_user/foo/bar/`
+
+The `M.generate.fn(...)` API has no module, so its files land under `<namespace>.default` at `~/.config/nvim/lua/luai_user/default/<fn>.lua`.
+
+#### Migrating from earlier luai releases
+
+Earlier luai releases either shipped demos under the plugin's own `lua/luai/{demo,omarchy,default}/` or wrote `M.generate` files to `~/.local/share/nvim/luai/generated/`. To bring any of those into the new user-owned location:
 
 ```bash
-mkdir -p "<install>/lua/luai/default"
-cp ~/.local/share/nvim/luai/generated/*.lua "<install>/lua/luai/default/"
+mkdir -p ~/.config/nvim/lua/luai_user
+
+# If you have shipped demos in the plugin install (older versions only):
+cp -r ~/.local/share/nvim/lazy/luai.nvim/lua/luai/demo \
+      ~/.local/share/nvim/lazy/luai.nvim/lua/luai/omarchy \
+      ~/.config/nvim/lua/luai_user/ 2>/dev/null
+
+# If you have functions under the older stdpath('data') location:
+cp ~/.local/share/nvim/luai/generated/*.lua \
+   ~/.config/nvim/lua/luai_user/default/ 2>/dev/null
+
+# Rewrite each init.lua so it registers the luai_user.* namespace:
+for d in ~/.config/nvim/lua/luai_user/*/; do
+  module=$(basename "$d")
+  printf 'return require("luai")._require_init("luai_user.%s")\n' "$module" > "$d/init.lua"
+done
 ```
 
-You can find `<install>` by running this in Neovim:
-
-```vim
-:echo fnamemodify(nvim_get_runtime_file("lua/luai.lua", v:false)[0], ":h:h")
-```
-
-After copying, the picker and `M.generate.<name>` resolve normally.
+After migration the picker and `M.generate.<name>` resolve normally and your functions live in your own dotfiles tree.
 
 ## Usage
 

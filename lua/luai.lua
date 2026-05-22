@@ -624,4 +624,9 @@ M.improve_select = function()
   end)
 end
 
+-- Expose discovery helpers for telescope extension
+M._get_generated_modules = get_generated_modules
+M._get_generated_functions_for_module = get_generated_functions_for_module
+M._read_generated_file = read_generated_file
+
 return M

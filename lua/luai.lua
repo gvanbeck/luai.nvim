@@ -537,7 +537,7 @@ M._require_init = function(module)
       local ok, fn = pcall(require, path_fn)
       if not ok then
         return function(options)
-          local filepath = find_module(module, key)
+          local filepath = module_to_path(module, key)
 
           local new_function, stream = generate_new_function {
             function_name = key,

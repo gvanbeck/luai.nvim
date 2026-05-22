@@ -408,7 +408,8 @@ M.generate = setmetatable({}, Generated)
 ---@param key string
 ---@return function
 function Generated:__index(key)
-  local filepath = get_generated_filepath(key)
+  ensure_default_module()
+  local filepath = module_to_path(DEFAULT_MODULE, key)
 
   -- Save things into memory, so we don't read from disk all the time
   if cached[key] and not path.is_file_newer(filepath, cached[key].stat) then
@@ -416,7 +417,7 @@ function Generated:__index(key)
   end
 
   -- Read things from disk, so we don't ask AI to generate every time
-  local generated_filepath = get_generated_filepath(key)
+  local generated_filepath = filepath
   local result = read_generated_file(generated_filepath)
   if result then
     local fn = result.implementation()
@@ -457,7 +458,8 @@ function Generated:__index(key)
 end
 
 function Generated:__newindex(key, value)
-  local generated_filepath = get_generated_filepath(key)
+  ensure_default_module()
+  local generated_filepath = module_to_path(DEFAULT_MODULE, key)
   local generated = assert(read_generated_file(generated_filepath), "existing func")
   local latest_history = generated.history[#generated.history]
 
@@ -489,7 +491,7 @@ function Generated:__newindex(key, value)
   ---@type luai.WriteFileOptions
   local towrite = {
     function_name = key,
-    filepath = get_generated_filepath(key),
+    filepath = module_to_path(DEFAULT_MODULE, key),
     history = history,
     implementation = updated.implementation,
   }

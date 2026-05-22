@@ -29,3 +29,18 @@ end, { desc = "Generate a new luai function via interactive prompts" })
 vim.api.nvim_create_user_command("LuaiImprove", function()
   require("luai").improve_select()
 end, { desc = "Pick a generated luai module/function and improve it" })
+
+vim.api.nvim_create_user_command("LuaiRun", function(c)
+  require("luai").run(c.args, {
+    range_start = c.line1,
+    range_end = c.line2,
+    range_present = c.range > 0,
+  })
+end, {
+  nargs = 1,
+  range = true,
+  complete = function(arglead)
+    return require("luai").complete_function_names(arglead)
+  end,
+  desc = "Run a generated luai function with auto-populated opts",
+})

@@ -165,3 +165,23 @@ end
 `agent.call` opens a small 70×12 floating window in the bottom-right corner showing the LLM's live stream. It does not steal focus and closes itself when the call completes. The returned string is the model's raw response (no Lua normalisation — use `require("luai").generate` if you want code generated and stored on disk).
 
 `agent.ask_user(question)` returns the user's free-text answer. Pass a second argument with a list of strings to get a selection prompt instead. Returns `nil` on cancel or after 60 seconds without a response.
+
+### Telescope picker
+
+`luai.nvim` ships a Telescope extension at `lua/telescope/_extensions/luai.lua` that lists every previously-generated function on your runtimepath and runs the one you pick.
+
+Load it once in your Neovim config:
+
+```lua
+require("telescope").load_extension("luai")
+```
+
+Then:
+
+```vim
+:Telescope luai
+```
+
+The picker shows `module.function — first line of description` and a preview pane with the function's source file. Pressing `<CR>` invokes the selected function with the most recent `option_example` from its history (`{}` if there's no example yet). The selection happens before the picker closes, so any popup the function opens stays on top.
+
+Telescope is a soft dependency — luai works fine without it; only this picker requires it.

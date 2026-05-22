@@ -500,18 +500,17 @@ end
 -- after you use demand, if you like it...
 -- you just replace it with require
 M.demand = function(module)
-  -- generate: lua/luai/utils/init.lua
-  -- generate: lua/luai/utils/split_string_on_vowels.lua
-  local init_file = find_module(module, "init")
+  local norm = normalize_module(module)
+  local init_file = module_to_path(norm, "init")
 
-  -- If we haven't generated the init file, then we need to generate it.
+  -- Generate the init stub on first use.
   if not vim.uv.fs_stat(init_file) then
     vim.fn.mkdir(vim.fn.fnamemodify(init_file, ":h"), "p")
-    local contents = string.format([[return require("luai")._require_init("%s")]], module)
+    local contents = string.format([[return require("luai")._require_init(%q)]], norm)
     vim.fn.writefile({ contents }, init_file)
   end
 
-  return require(module)
+  return require(norm)
 end
 
 --- Improve a function that already exists. This must have been generated already.

@@ -17,8 +17,56 @@ local function build_items()
   return items
 end
 
-local function pick(_opts)
-  error "luai telescope extension: pick not implemented yet"
+local function pick(opts)
+  opts = opts or {}
+  local pickers = require "telescope.pickers"
+  local finders = require "telescope.finders"
+  local conf = require("telescope.config").values
+  local previewers = require "telescope.previewers"
+  local actions = require "telescope.actions"
+  local action_state = require "telescope.actions.state"
+
+  local items = build_items()
+
+  pickers.new(opts, {
+    prompt_title = "luai functions",
+    finder = finders.new_table {
+      results = items,
+      entry_maker = function(item)
+        local desc_summary = (item.description:gsub("\n", " ")):sub(1, 60)
+        local display = string.format("%s.%s", item.module, item.fn)
+        if desc_summary ~= "" then
+          display = display .. " — " .. desc_summary
+        end
+        return {
+          value = item,
+          display = display,
+          ordinal = item.module .. "." .. item.fn,
+          path = item.path,
+        }
+      end,
+    },
+    sorter = conf.generic_sorter(opts),
+    previewer = previewers.new_buffer_previewer {
+      title = "function source",
+      define_preview = function(self, entry)
+        local lines = vim.fn.readfile(entry.path)
+        vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+        vim.bo[self.state.bufnr].filetype = "lua"
+      end,
+    },
+    attach_mappings = function(prompt_bufnr, _map)
+      actions.select_default:replace(function()
+        local entry = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+        if not entry then return end
+        local item = entry.value
+        local mod = require(item.module)
+        mod[item.fn](item.option_example or {})
+      end)
+      return true
+    end,
+  }):find()
 end
 
 local ext = require("telescope").register_extension {

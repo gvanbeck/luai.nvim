@@ -12,10 +12,16 @@ vim.api.nvim_create_user_command("LuaiGenerate", function()
       if description == nil then
         return
       end
-      require("luai").generate[name] {
-        __description = description,
-        __prompt = "Accept (y/n)? ",
-      }
+      -- Run generation outside the vim.ui.input callback chain so the
+      -- accept-prompt's vim.fn.input blocks correctly. Inside scheduled
+      -- callbacks (which dressing/snacks/noice route vim.ui.input through)
+      -- nested cmdline input can return immediately instead of waiting.
+      vim.schedule(function()
+        require("luai").generate[name] {
+          __description = description,
+          __prompt = "Accept (y/n)? ",
+        }
+      end)
     end)
   end)
 end, { desc = "Generate a new luai function via interactive prompts" })

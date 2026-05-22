@@ -7,27 +7,51 @@
 
 local M = {}
 
----@param opts? { title?: string }
+---@param opts? { title?: string, geometry?: { size?: string|table }, focus?: boolean, winblend?: integer }
 ---@return luai.StreamWin
 function M.open(opts)
   opts = opts or {}
+  local geometry = opts.geometry or { size = "fullsize" }
+
+  local width, height, col, row
+  if geometry.size == "corner" then
+    width = 70
+    height = 12
+    col = math.max(0, vim.o.columns - width - 2)
+    row = math.max(0, vim.o.lines - height - 2)
+  elseif type(geometry.size) == "table" then
+    width = geometry.size.width
+    height = geometry.size.height
+    col = geometry.size.col
+    row = geometry.size.row
+  else
+    width = math.floor(vim.o.columns * 0.8)
+    height = math.floor(vim.o.lines * 0.8)
+    col = math.floor((vim.o.columns - width) / 2)
+    row = math.floor((vim.o.lines - height) / 2)
+  end
+
+  local focus = opts.focus
+  if focus == nil then focus = true end
 
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].filetype = "lua"
 
-  local width = math.floor(vim.o.columns * 0.8)
-  local height = math.floor(vim.o.lines * 0.8)
-  local win = vim.api.nvim_open_win(buf, true, {
+  local win = vim.api.nvim_open_win(buf, focus, {
     relative = "editor",
     width = width,
     height = height,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - height) / 2),
+    col = col,
+    row = row,
     style = "minimal",
     border = "rounded",
     title = opts.title or "luai",
     title_pos = "center",
   })
+
+  if opts.winblend then
+    vim.wo[win].winblend = opts.winblend
+  end
 
   local function append(chunk)
     if chunk == nil or chunk == "" then

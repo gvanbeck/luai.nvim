@@ -85,3 +85,48 @@ do
   s.close()
   print "PASS: stream_win.replace locks buffer"
 end
+
+-- Test: open with geometry = { size = "corner" } opens a 70x12 window in bottom-right.
+do
+  local s = stream_win.open { geometry = { size = "corner" } }
+  local cfg = vim.api.nvim_win_get_config(s.win)
+  assert(cfg.width == 70, "width is 70, got: " .. tostring(cfg.width))
+  assert(cfg.height == 12, "height is 12, got: " .. tostring(cfg.height))
+  -- Bottom-right means col + width is near the right edge and row + height is near the bottom.
+  assert(cfg.col + 70 <= vim.o.columns, "fits horizontally")
+  assert(cfg.row + 12 <= vim.o.lines, "fits vertically")
+  assert(cfg.col + 70 >= vim.o.columns - 4, "col is near right edge, got col: " .. tostring(cfg.col))
+  assert(cfg.row + 12 >= vim.o.lines - 4, "row is near bottom edge, got row: " .. tostring(cfg.row))
+  s.close()
+  print "PASS: stream_win.open corner geometry"
+end
+
+-- Test: open with focus = false does not change the current window after opening.
+do
+  local before_win = vim.api.nvim_get_current_win()
+  local s = stream_win.open { focus = false }
+  local after_win = vim.api.nvim_get_current_win()
+  assert(after_win == before_win, "focus=false leaves current window unchanged")
+  s.close()
+  print "PASS: stream_win.open focus=false leaves focus alone"
+end
+
+-- Test: open with winblend = 10 sets the win-local winblend option.
+do
+  local s = stream_win.open { winblend = 10 }
+  assert(vim.wo[s.win].winblend == 10, "winblend applied, got: " .. tostring(vim.wo[s.win].winblend))
+  s.close()
+  print "PASS: stream_win.open winblend"
+end
+
+-- Test: open without geometry uses the existing fullsize default (80% x 80%).
+do
+  local s = stream_win.open {}
+  local cfg = vim.api.nvim_win_get_config(s.win)
+  local expected_width = math.floor(vim.o.columns * 0.8)
+  local expected_height = math.floor(vim.o.lines * 0.8)
+  assert(cfg.width == expected_width, "default width unchanged, got: " .. tostring(cfg.width))
+  assert(cfg.height == expected_height, "default height unchanged, got: " .. tostring(cfg.height))
+  s.close()
+  print "PASS: stream_win.open fullsize default unchanged"
+end

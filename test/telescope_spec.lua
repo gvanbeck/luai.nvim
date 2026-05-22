@@ -313,3 +313,35 @@ do
   assert(items[1].fn == "ok_fn")
   print "PASS: build_items skips corrupt files"
 end
+
+-- Test: build_items strips the legacy "The function should also make sure to:" prefix
+-- from descriptions stored in older history files.
+do
+  package.loaded["luai"] = {
+    _get_generated_modules = function()
+      return { { module = "legacy", dir = "/p/legacy", init = "/p/legacy/init.lua" } }
+    end,
+    _get_generated_functions_for_module = function(_)
+      return { { module = "legacy", fn = "old_fn", path = "/p/legacy/old_fn.lua" } }
+    end,
+    _read_generated_file = function(_)
+      return {
+        history = {
+          {
+            option_example = { x = 1 },
+            description = "The function should also make sure to:\nReally just do the thing",
+          },
+        },
+      }
+    end,
+  }
+  package.loaded["telescope"] = { register_extension = function(spec) return spec end }
+  package.loaded["telescope._extensions.luai"] = nil
+  local ext = require "telescope._extensions.luai"
+  local items = ext._build_items()
+
+  assert(#items == 1)
+  assert(items[1].description == "Really just do the thing",
+    "legacy prefix stripped, got: " .. tostring(items[1].description))
+  print "PASS: build_items strips legacy description prefix"
+end

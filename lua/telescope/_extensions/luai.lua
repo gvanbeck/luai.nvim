@@ -1,3 +1,17 @@
+-- Older history files were generated with a prompt-templating prefix baked
+-- into the description. Strip it on read so legacy files display cleanly.
+local LEGACY_DESCRIPTION_PREFIX = "The function should also make sure to:\n"
+
+local function clean_description(raw)
+  if type(raw) ~= "string" or raw == "" then
+    return ""
+  end
+  if vim.startswith(raw, LEGACY_DESCRIPTION_PREFIX) then
+    return raw:sub(#LEGACY_DESCRIPTION_PREFIX + 1)
+  end
+  return raw
+end
+
 local function build_items()
   local luai = require "luai"
   local items = {}
@@ -12,7 +26,7 @@ local function build_items()
           fn = fn_item.fn,
           path = fn_item.path,
           option_example = latest.option_example,
-          description = latest.description or "",
+          description = clean_description(latest.description),
         })
       end
     end

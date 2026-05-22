@@ -3,12 +3,7 @@ return function(opts)
   local options = vim.deepcopy(opts.options)
   local function_name = opts.function_name
 
-  local description = options.__description
-  if description == nil then
-    description = ""
-  else
-    description = "The function should also make sure to:\n" .. description
-  end
+  local description = options.__description or ""
 
   local history = options.__history or ""
 

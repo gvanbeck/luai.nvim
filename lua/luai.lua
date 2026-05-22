@@ -231,15 +231,17 @@ local generate_new_function = function(opts)
   print("[luai] generating new function:", opts.function_name)
 
   local new_prompt = require "luai.prompt"(opts)
-  local response_text = dispatch_to_provider(new_prompt.prompt, opts.options)
+  local response_text, stream = dispatch_to_provider(new_prompt.prompt, opts.options)
   local implementation = normalize_generated_code(response_text)
+
+  stream.replace(vim.split(implementation, "\n"))
 
   return {
     implementation = implementation,
     description = new_prompt.description,
     option_list = new_prompt.option_list,
     option_example = new_prompt.option_example,
-  }
+  }, stream
 end
 
 local function find_module(module, file)
@@ -309,7 +311,7 @@ local update_existing_generation = function(filepath, function_name, value)
 
   add_previous_implementation_context(options, latest_history)
 
-  local updated = generate_new_function {
+  local updated, stream = generate_new_function {
     function_name = function_name,
     options = options,
   }
@@ -330,6 +332,7 @@ local update_existing_generation = function(filepath, function_name, value)
     implementation = updated.implementation,
   }
   write_generate_file(towrite)
+  stream.close()
 end
 
 ---@class luai.CachedGeneration
@@ -418,7 +421,7 @@ function Generated:__newindex(key, value)
 
   add_previous_implementation_context(options, latest_history)
 
-  local updated = generate_new_function {
+  local updated, stream = generate_new_function {
     function_name = key,
     options = options,
   }
@@ -439,6 +442,7 @@ function Generated:__newindex(key, value)
     implementation = updated.implementation,
   }
   write_generate_file(towrite)
+  stream.close()
 end
 
 -- after you use demand, if you like it...
@@ -484,11 +488,12 @@ M._require_init = function(module)
         return function(options)
           local filepath = find_module(module, key)
 
-          local new_function = generate_new_function {
+          local new_function, stream = generate_new_function {
             function_name = key,
             options = options,
           }
           store_new_function(filepath, key, new_function)
+          stream.close()
 
           return require(path_fn)(options)
         end

@@ -373,28 +373,21 @@ function Generated:__index(key)
   return function(opts)
     local prompt = opts.__prompt
 
-    local new_function = generate_new_function {
+    local new_function, stream = generate_new_function {
       function_name = key,
       options = opts,
     }
 
     if prompt then
-      local win = require("luai.win").popup {
-        name = "luai-implementation.lua",
-        filetype = "lua",
-      }
-
-      vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(new_function.implementation, "\n"))
-      vim.cmd.redraw()
-
       local accept = vim.fn.input { prompt = "Accept (y/n)? ", default = "y", cancelreturn = "n" }
-      pcall(vim.api.nvim_buf_delete, vim.api.nvim_win_get_buf(win), { force = true })
-      pcall(vim.api.nvim_win_close, win, true)
+      stream.close()
 
       if accept ~= "y" then
         -- TODO: Re-request it
         return
       end
+    else
+      stream.close()
     end
 
     store_new_function(filepath, key, new_function)

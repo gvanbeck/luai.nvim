@@ -85,6 +85,34 @@ If you call any luai entry point before configuring providers, you'll get `[luai
 
 `luai.nvim` normalises and validates the provider's response — code fences, `<lua_function>` tags, and small amounts of leading prose are tolerated as long as the body parses with `loadstring`.
 
+### Where generated functions live
+
+All generated functions are stored under the active luai.nvim install directory at `<install>/lua/luai/<module>/<function>.lua`. luai resolves the install dir at runtime via `nvim_get_runtime_file("lua/luai.lua", false)`, so this works whether luai is loaded from a lazy.nvim clone, a manual `:set rtp+=` from a development checkout, or anywhere else on the runtimepath.
+
+Module names passed to `demand(...)` are auto-prefixed with `luai.` if absent:
+- `demand("demo")` → `<install>/lua/luai/demo/`
+- `demand("luai.demo")` → same path (no double-prefix)
+- `demand("foo.bar")` → `<install>/lua/luai/foo/bar/`
+
+The `M.generate.fn(...)` API has no module, so its files land under the fallback module `luai.default` at `<install>/lua/luai/default/<fn>.lua`.
+
+#### Migrating older files
+
+If you used a luai release that wrote `M.generate` files to `~/.local/share/nvim/luai/generated/`, those files are still on disk but no longer surfaced by luai. To bring them under the new root:
+
+```bash
+mkdir -p "<install>/lua/luai/default"
+cp ~/.local/share/nvim/luai/generated/*.lua "<install>/lua/luai/default/"
+```
+
+You can find `<install>` by running this in Neovim:
+
+```vim
+:echo fnamemodify(nvim_get_runtime_file("lua/luai.lua", v:false)[0], ":h:h")
+```
+
+After copying, the picker and `M.generate.<name>` resolve normally.
+
 ## Usage
 
 ### `demand`

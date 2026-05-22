@@ -31,16 +31,28 @@ vim.api.nvim_create_user_command("LuaiImprove", function()
 end, { desc = "Pick a generated luai module/function and improve it" })
 
 vim.api.nvim_create_user_command("LuaiRun", function(c)
-  require("luai").run(c.args, {
+  local ctx = {
     range_start = c.line1,
     range_end = c.line2,
     range_present = c.range > 0,
-  })
+  }
+  if c.args == "" then
+    local candidates = require("luai").complete_function_names ""
+    if #candidates == 0 then
+      vim.notify("[luai] no generated functions found", vim.log.levels.WARN)
+      return
+    end
+    vim.ui.select(candidates, { prompt = "Run luai function:" }, function(choice)
+      if choice then require("luai").run(choice, ctx) end
+    end)
+    return
+  end
+  require("luai").run(c.args, ctx)
 end, {
-  nargs = 1,
+  nargs = "?",
   range = true,
   complete = function(arglead)
     return require("luai").complete_function_names(arglead)
   end,
-  desc = "Run a generated luai function with auto-populated opts",
+  desc = "Run a generated luai function (no arg = pick interactively)",
 })

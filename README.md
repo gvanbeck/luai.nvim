@@ -288,13 +288,16 @@ Telescope is a soft dependency — luai works fine without it; only this picker 
 The most direct way to invoke a function is the `:LuaiRun` ex-command, which auto-populates an `opts` table with your current editor context and forwards it to the function:
 
 ```vim
+:LuaiRun                                  " no arg → pick interactively via vim.ui.select
 :LuaiRun make_readme
 :LuaiRun demo.print_all_odd_values_in_table
 :'<,'>LuaiRun summarize
 :5,15LuaiRun reformat
 ```
 
-Bare names (`:LuaiRun make_readme`) resolve to `<namespace>.default.<name>`. Module-prefixed names (`:LuaiRun demo.foo`) resolve to `<namespace>.demo.foo`. Tab-completion lists every discovered combination plus bare-name shortcuts for the default module.
+Type `:LuaiRun ` and press `<Tab>` to cycle through every discovered `module.fn` candidate (plus bare-name shortcuts for the default module). Or invoke `:LuaiRun` with no argument to get a `vim.ui.select` picker over the same list — the selection action still passes the current range/selection to the chosen function.
+
+Bare names (`:LuaiRun make_readme`) resolve to `<namespace>.default.<name>`. Module-prefixed names (`:LuaiRun demo.foo`) resolve to `<namespace>.demo.foo`.
 
 The function receives a single `opts` table with these convention keys:
 

@@ -232,7 +232,12 @@ local generate_new_function = function(opts)
 
   local new_prompt = require "luai.prompt"(opts)
   local response_text, stream = dispatch_to_provider(new_prompt.prompt, opts.options)
-  local implementation = normalize_generated_code(response_text)
+
+  local ok, implementation = pcall(normalize_generated_code, response_text)
+  if not ok then
+    stream.close()
+    error(implementation)
+  end
 
   stream.replace(vim.split(implementation, "\n"))
 

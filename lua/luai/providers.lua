@@ -22,7 +22,10 @@ local function make_stream_json_parser(user_on_chunk)
   local function process_line(line)
     if line == "" then return end
     local ok, event = pcall(vim.json.decode, line)
-    if not ok or type(event) ~= "table" then return end
+    if not ok or type(event) ~= "table" then
+      vim.notify(string.format("[luai] stream-json: skipping malformed line: %s", line), vim.log.levels.WARN)
+      return
+    end
 
     if event.type == "assistant" and type(event.message) == "table" and type(event.message.content) == "table" then
       for _, content in ipairs(event.message.content) do
@@ -142,7 +145,7 @@ end
 function M.cursor_agent(spec)
   assert(spec and type(spec.model) == "string", "luai.providers.cursor_agent: `model` is required")
 
-  return M.cli {
+  local provider = M.cli {
     name = "cursor_agent",
     cmd = function(prompt, opts)
       local model = opts.__model or spec.model
@@ -160,6 +163,20 @@ function M.cursor_agent(spec)
     end,
     parse_response = json_result "cursor_agent",
   }
+
+  -- cursor_agent does not support streaming in v1; drop __on_chunk so cli
+  -- falls into the sync :wait() branch instead of streaming raw JSON to the
+  -- caller's window.
+  return function(prompt, opts)
+    if opts.__on_chunk ~= nil then
+      local clean_opts = {}
+      for k, v in pairs(opts) do
+        if k ~= "__on_chunk" then clean_opts[k] = v end
+      end
+      opts = clean_opts
+    end
+    return provider(prompt, opts)
+  end
 end
 
 ---@param spec { model: string }

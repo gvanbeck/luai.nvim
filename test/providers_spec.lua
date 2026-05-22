@@ -282,3 +282,38 @@ do
   assert(not vim.list_contains(captured_argv, "sonnet"))
   print "PASS: claude_code __model override"
 end
+
+-- Test: cli with opts.__on_chunk uses vim.system's async/callback form
+-- and forwards stdout chunks to __on_chunk; the final return is the concatenated stdout.
+do
+  local captured_argv, captured_stdout_cb, captured_on_complete
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, sys_opts, on_complete)
+    captured_argv = argv
+    captured_stdout_cb = sys_opts.stdout
+    captured_on_complete = on_complete
+    vim.schedule(function()
+      sys_opts.stdout(nil, "hello ")
+      sys_opts.stdout(nil, "world")
+      on_complete { code = 0, stdout = "", stderr = "" }
+    end)
+    return { kill = function(_) end }
+  end
+
+  local chunks = {}
+  local p = providers.cli {
+    name = "stream-test",
+    cmd = { "x" },
+  }
+  local result = p("prompt", {
+    __on_chunk = function(c) table.insert(chunks, c) end,
+  })
+
+  assert(result == "hello world", "concatenated stdout returned, got: " .. tostring(result))
+  assert(#chunks == 2, "two chunks forwarded, got: " .. #chunks)
+  assert(chunks[1] == "hello ")
+  assert(chunks[2] == "world")
+  assert(captured_argv[1] == "x")
+  assert(type(captured_on_complete) == "function", "vim.system called in async form (3rd arg)")
+  print "PASS: cli async with __on_chunk"
+end

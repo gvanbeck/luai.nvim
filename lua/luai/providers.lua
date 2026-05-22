@@ -29,22 +29,58 @@ function M.cli(spec)
       error(string.format("[luai] %s: command not on PATH: %s", spec.name, argv[1]))
     end
 
-    local result = vim.system(argv, { text = true, env = spec.env }):wait()
-    local stdout = result.stdout or ""
-    local stderr = result.stderr or ""
+    local on_chunk = opts.__on_chunk
+    local stdout, stderr, code
 
-    if result.code ~= 0 then
+    if on_chunk then
+      local stdout_chunks = {}
+      local stderr_chunks = {}
+      local done = false
+
+      local sys = vim.system(argv, {
+        text = true,
+        env = spec.env,
+        stdout = function(_, chunk)
+          if chunk then
+            table.insert(stdout_chunks, chunk)
+            vim.schedule(function() on_chunk(chunk) end)
+          end
+        end,
+        stderr = function(_, chunk)
+          if chunk then table.insert(stderr_chunks, chunk) end
+        end,
+      }, function(result)
+        code = result.code
+        done = true
+      end)
+
+      local ok = vim.wait(300000, function() return done end, 50)
+      if not ok then
+        pcall(function() sys:kill(15) end)
+        error(string.format("[luai] %s: generation timed out after 5m", spec.name))
+      end
+
+      stdout = table.concat(stdout_chunks)
+      stderr = table.concat(stderr_chunks)
+    else
+      local result = vim.system(argv, { text = true, env = spec.env }):wait()
+      stdout = result.stdout or ""
+      stderr = result.stderr or ""
+      code = result.code
+    end
+
+    if code ~= 0 then
       local trimmed_err = vim.trim(stderr)
       local trimmed_out = vim.trim(stdout)
       local details = trimmed_err ~= "" and trimmed_err or trimmed_out
       if details == "" then
-        details = "exit code " .. tostring(result.code)
+        details = "exit code " .. tostring(code)
       end
       error(string.format("[luai] %s failed: %s", spec.name, details))
     end
 
     if spec.parse_response then
-      return spec.parse_response(stdout, stderr, result.code)
+      return spec.parse_response(stdout, stderr, code)
     end
 
     return stdout

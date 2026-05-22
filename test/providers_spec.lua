@@ -343,3 +343,58 @@ do
   assert(kill_called, "sys:kill should have been called")
   print "PASS: cli async timeout kills child"
 end
+
+-- Test: claude_code with __on_chunk switches argv to --output-format stream-json --verbose
+-- and forwards model text deltas (extracted from assistant events) to user's on_chunk.
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, sys_opts, on_complete)
+    captured_argv = argv
+    vim.schedule(function()
+      -- Emit two assistant events with text and one final result event.
+      sys_opts.stdout(nil, '{"type":"assistant","message":{"content":[{"type":"text","text":"hello "}]}}\n')
+      sys_opts.stdout(nil, '{"type":"assistant","message":{"content":[{"type":"text","text":"world"}]}}\n')
+      sys_opts.stdout(nil, '{"type":"result","result":"return function(opts) end"}\n')
+      on_complete { code = 0, stdout = "", stderr = "" }
+    end)
+    return { kill = function() end }
+  end
+
+  local user_chunks = {}
+  local p = providers.claude_code { model = "sonnet" }
+  local result = p("my prompt", {
+    __on_chunk = function(t) table.insert(user_chunks, t) end,
+  })
+
+  assert(result == "return function(opts) end", "extracts result from final stream-json event")
+  assert(vim.list_contains(captured_argv, "stream-json"), "argv uses stream-json output format")
+  assert(vim.list_contains(captured_argv, "--verbose"), "argv includes --verbose")
+  assert(vim.list_contains(captured_argv, "sonnet"))
+  assert(captured_argv[#captured_argv] == "my prompt")
+  assert(#user_chunks == 2, "two text deltas forwarded, got: " .. #user_chunks)
+  assert(user_chunks[1] == "hello ")
+  assert(user_chunks[2] == "world")
+  print "PASS: claude_code stream-json argv + text-delta forwarding"
+end
+
+-- Test: claude_code WITHOUT __on_chunk still uses --output-format json (sync path unchanged).
+do
+  local captured_argv
+  vim.fn.executable = function(_) return 1 end
+  vim.system = function(argv, _sys_opts)
+    captured_argv = argv
+    return {
+      wait = function()
+        return { code = 0, stdout = '{"result":"x"}', stderr = "" }
+      end,
+    }
+  end
+
+  local p = providers.claude_code { model = "sonnet" }
+  local result = p("prompt", {})
+  assert(result == "x")
+  assert(vim.list_contains(captured_argv, "json"))
+  assert(not vim.list_contains(captured_argv, "stream-json"))
+  print "PASS: claude_code without __on_chunk stays on json path"
+end

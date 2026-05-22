@@ -15,6 +15,56 @@ local function json_result(provider_name)
   end
 end
 
+local function make_stream_json_parser(user_on_chunk)
+  local pending = ""
+  local final_result
+
+  local function process_line(line)
+    if line == "" then return end
+    local ok, event = pcall(vim.json.decode, line)
+    if not ok or type(event) ~= "table" then return end
+
+    if event.type == "assistant" and type(event.message) == "table" and type(event.message.content) == "table" then
+      for _, content in ipairs(event.message.content) do
+        if type(content) == "table" and content.type == "text" and type(content.text) == "string" then
+          user_on_chunk(content.text)
+        end
+      end
+    elseif event.type == "result" and type(event.result) == "string" then
+      final_result = event.result
+    end
+  end
+
+  local function consume(raw_chunk)
+    pending = pending .. raw_chunk
+    while true do
+      local nl = pending:find "\n"
+      if not nl then break end
+      local line = pending:sub(1, nl - 1)
+      pending = pending:sub(nl + 1)
+      process_line(line)
+    end
+  end
+
+  local function finalize()
+    -- Flush any unterminated trailing line without re-processing what consume
+    -- already handled during streaming.
+    if pending ~= "" then
+      process_line(pending)
+      pending = ""
+    end
+    if final_result == nil then
+      error "[luai] claude_code: no result event in stream-json output"
+    end
+    return final_result
+  end
+
+  return {
+    consume = consume,
+    finalize = finalize,
+  }
+end
+
 ---@param spec { name: string, cmd: string[]|fun(prompt: string, opts: table): string[], parse_response?: fun(stdout: string, stderr: string, exit_code: integer): string, env?: table }
 ---@return luai.Provider
 function M.cli(spec)
@@ -117,20 +167,47 @@ end
 function M.claude_code(spec)
   assert(spec and type(spec.model) == "string", "luai.providers.claude_code: `model` is required")
 
-  return M.cli {
-    name = "claude_code",
-    cmd = function(prompt, opts)
-      local model = opts.__model or spec.model
-      return {
-        "claude",
-        "-p",
-        "--output-format", "json",
-        "--model", model,
-        prompt,
-      }
-    end,
-    parse_response = json_result "claude_code",
-  }
+  return function(prompt, opts)
+    local user_on_chunk = opts.__on_chunk
+    local stream = user_on_chunk and make_stream_json_parser(user_on_chunk) or nil
+
+    local provider = M.cli {
+      name = "claude_code",
+      cmd = function(_prompt, _opts)
+        local model = _opts.__model or spec.model
+        if stream then
+          return {
+            "claude",
+            "-p",
+            "--output-format", "stream-json",
+            "--verbose",
+            "--model", model,
+            _prompt,
+          }
+        end
+        return {
+          "claude",
+          "-p",
+          "--output-format", "json",
+          "--model", model,
+          _prompt,
+        }
+      end,
+      parse_response = function(stdout, stderr, code)
+        if stream then
+          return stream.finalize()
+        end
+        return json_result "claude_code"(stdout, stderr, code)
+      end,
+    }
+
+    local call_opts = opts
+    if stream then
+      call_opts = vim.tbl_extend("force", opts, { __on_chunk = stream.consume })
+    end
+
+    return provider(prompt, call_opts)
+  end
 end
 
 return M

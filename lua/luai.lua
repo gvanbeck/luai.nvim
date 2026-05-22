@@ -562,17 +562,22 @@ local generated_module_pattern = '^return require%("luai"%)%._require_init%("([^
 
 ---@return table[]
 local get_generated_modules = function()
-  local possible_inits = vim.api.nvim_get_runtime_file("lua/**/init.lua", true)
+  local root = luai_root()
   local items = {}
-  for _, file in ipairs(possible_inits) do
-    local lines = vim.fn.readfile(file)
-    local module = lines[1] and lines[1]:match(generated_module_pattern)
-    if module then
-      table.insert(items, {
-        module = module,
-        dir = vim.fn.fnamemodify(file, ":h"),
-        init = file,
-      })
+  for name, type_ in vim.fs.dir(root) do
+    if type_ == "directory" then
+      local init_path = vim.fs.joinpath(root, name, "init.lua")
+      if vim.uv.fs_stat(init_path) then
+        local lines = vim.fn.readfile(init_path)
+        local module = lines[1] and lines[1]:match(generated_module_pattern)
+        if module then
+          table.insert(items, {
+            module = module,
+            dir = vim.fs.joinpath(root, name),
+            init = init_path,
+          })
+        end
+      end
     end
   end
 

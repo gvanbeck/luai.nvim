@@ -22,53 +22,49 @@ local config = {
   providers = {},
   ---@type string
   default_provider = "default",
+  ---@type string: path ending in `/lua/<namespace>` where generated functions live
+  user_storage = vim.fn.stdpath "config" .. "/lua/luai_user",
+  ---@type string: derived from the basename of user_storage by setup()
+  _namespace = "luai_user",
 }
 
-local DEFAULT_MODULE = "luai.default"
-
----@return string: the directory containing the active luai.nvim install (parent of /lua)
-local function luai_install_dir()
-  local paths = vim.api.nvim_get_runtime_file("lua/luai.lua", false)
-  if not paths or #paths == 0 then
-    error "[luai] cannot find luai install directory (lua/luai.lua not on runtimepath)"
-  end
-  return vim.fn.fnamemodify(paths[1], ":h:h")
+local function namespace()
+  return config._namespace
 end
 
----@return string: <install>/lua/luai — the root for all generated content
-local function luai_root()
-  return vim.fs.joinpath(luai_install_dir(), "lua", "luai")
+local function storage_root()
+  return config.user_storage
 end
 
----@param module? string
----@return string: a module name guaranteed to start with "luai." (or be exactly "luai")
+local function default_module()
+  return namespace() .. ".default"
+end
+
 local function normalize_module(module)
+  local ns = namespace()
   if module == nil or module == "" then
-    return DEFAULT_MODULE
+    return ns .. ".default"
   end
-  if module == "luai" or vim.startswith(module, "luai.") then
+  if module == ns or vim.startswith(module, ns .. ".") then
     return module
   end
-  return "luai." .. module
+  return ns .. "." .. module
 end
 
----@param module string: normalized module (starts with "luai." or equals "luai")
----@param file string: filename without extension (e.g. "init", "create_window")
----@return string: absolute filepath under <luai_root>
 local function module_to_path(module, file)
-  local sub = module == "luai" and "" or module:sub(#"luai." + 1)
+  local ns = namespace()
+  local sub = module == ns and "" or module:sub(#ns + 2) -- strip "<ns>." prefix
   local parts = sub == "" and {} or vim.split(sub, ".", { plain = true })
   table.insert(parts, file .. ".lua")
-  return vim.fs.joinpath(luai_root(), unpack(parts))
+  return vim.fs.joinpath(storage_root(), unpack(parts))
 end
 
----Ensure the default module's init.lua exists so `require("luai.default.<fn>")` resolves.
 local function ensure_default_module()
-  local init_file = module_to_path(DEFAULT_MODULE, "init")
+  local init_file = module_to_path(default_module(), "init")
   if not vim.uv.fs_stat(init_file) then
     vim.fn.mkdir(vim.fn.fnamemodify(init_file, ":h"), "p")
-    local contents = string.format([[return require("luai")._require_init(%q)]], DEFAULT_MODULE)
-    vim.fn.writefile({ contents }, init_file)
+    local stub = string.format([[return require("luai")._require_init(%q)]], default_module())
+    vim.fn.writefile({ stub }, init_file)
   end
 end
 
@@ -103,6 +99,12 @@ end
 M.setup = function(opts)
   opts = opts or {}
   config = vim.tbl_extend("force", config, opts)
+  config.user_storage = vim.fn.expand(config.user_storage)
+  local ns = config.user_storage:match "/lua/([^/]+)/?$"
+  assert(ns,
+    "[luai] user_storage must end in /lua/<namespace>, got: " .. config.user_storage)
+  config._namespace = ns
+  vim.fn.mkdir(config.user_storage, "p")
 end
 
 ---@param implementation string
@@ -380,7 +382,7 @@ M.generate = setmetatable({}, Generated)
 ---@return function
 function Generated:__index(key)
   ensure_default_module()
-  local filepath = module_to_path(DEFAULT_MODULE, key)
+  local filepath = module_to_path(default_module(), key)
 
   -- Save things into memory, so we don't read from disk all the time
   if cached[key] and not path.is_file_newer(filepath, cached[key].stat) then
@@ -429,7 +431,7 @@ end
 
 function Generated:__newindex(key, value)
   ensure_default_module()
-  local generated_filepath = module_to_path(DEFAULT_MODULE, key)
+  local generated_filepath = module_to_path(default_module(), key)
   local generated = assert(read_generated_file(generated_filepath), "existing func")
   local latest_history = generated.history[#generated.history]
 
@@ -461,7 +463,7 @@ function Generated:__newindex(key, value)
   ---@type luai.WriteFileOptions
   local towrite = {
     function_name = key,
-    filepath = module_to_path(DEFAULT_MODULE, key),
+    filepath = module_to_path(default_module(), key),
     history = history,
     implementation = updated.implementation,
   }
@@ -532,7 +534,7 @@ local generated_module_pattern = '^return require%("luai"%)%._require_init%("([^
 
 ---@return table[]
 local get_generated_modules = function()
-  local root = luai_root()
+  local root = storage_root()
   local items = {}
   for name, type_ in vim.fs.dir(root) do
     if type_ == "directory" then
@@ -657,6 +659,7 @@ M._read_generated_file = read_generated_file
 -- Expose storage helpers for testing
 M._normalize_module = normalize_module
 M._module_to_path = module_to_path
-M._luai_root = luai_root
+M._namespace = namespace
+M._storage_root = storage_root
 
 return M

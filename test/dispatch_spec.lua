@@ -1,6 +1,21 @@
 -- Run with: nvim --headless --noplugin -u NONE -l test/dispatch_spec.lua
 vim.opt.rtp:append "."
 
+-- Stub stream_win for all tests in this file (real impl tested separately).
+local stub_calls = { open = 0 }
+package.loaded["luai.stream_win"] = {
+  open = function(_opts)
+    stub_calls.open = stub_calls.open + 1
+    return {
+      win = 0,
+      buf = 0,
+      append = function() end,
+      replace = function() end,
+      close = function() end,
+    }
+  end,
+}
+
 package.loaded["luai"] = nil
 local luai = require "luai"
 
@@ -82,4 +97,30 @@ do
   assert(seen_opts.__model == "x")
   assert(seen_opts.foo == 1)
   print "PASS: dispatch forwards prompt and opts unchanged"
+end
+
+-- Test: dispatch opens a stream window, sets opts.__on_chunk, and returns (result, stream).
+do
+  local seen_on_chunk
+  luai.setup {
+    providers = {
+      default = function(prompt, opts)
+        seen_on_chunk = opts.__on_chunk
+        return "ok"
+      end,
+    },
+    default_provider = "default",
+  }
+
+  local opens_before = stub_calls.open
+  local result, stream = luai._dispatch_to_provider("prompt", {})
+
+  assert(stub_calls.open == opens_before + 1, "stream_win.open was called")
+  assert(result == "ok")
+  assert(type(seen_on_chunk) == "function", "provider received a callable __on_chunk")
+  assert(type(stream) == "table", "second return is the stream handle table")
+  assert(type(stream.append) == "function")
+  assert(type(stream.replace) == "function")
+  assert(type(stream.close) == "function")
+  print "PASS: dispatch opens stream and forwards __on_chunk"
 end

@@ -239,3 +239,50 @@ Then:
 The picker shows `module.function — first line of description` and a preview pane with the function's source file. Pressing `<CR>` invokes the selected function with the most recent `option_example` from its history (`{}` if there's no example yet). The selection happens before the picker closes, so any popup the function opens stays on top.
 
 Telescope is a soft dependency — luai works fine without it; only this picker requires it.
+
+### Running generated functions
+
+The most direct way to invoke a function is the `:LuaiRun` ex-command, which auto-populates an `opts` table with your current editor context and forwards it to the function:
+
+```vim
+:LuaiRun make_readme
+:LuaiRun demo.print_all_odd_values_in_table
+:'<,'>LuaiRun summarize
+:5,15LuaiRun reformat
+```
+
+Bare names (`:LuaiRun make_readme`) resolve to `<namespace>.default.<name>`. Module-prefixed names (`:LuaiRun demo.foo`) resolve to `<namespace>.demo.foo`. Tab-completion lists every discovered combination plus bare-name shortcuts for the default module.
+
+The function receives a single `opts` table with these convention keys:
+
+| Key | Type | Contents |
+|---|---|---|
+| `opts.bufnr` | integer | Current buffer. |
+| `opts.win` | integer | Current window id. |
+| `opts.cwd` | string | Working directory. |
+| `opts.cword` | string | Word under cursor (`<cword>`). |
+| `opts.cfile` | string | File under cursor (`<cfile>`). |
+| `opts.cursor` | `{row,col}` | 1-indexed line, 0-indexed col. |
+| `opts.line_number` | integer | Cursor line. |
+| `opts.line` | string | Text of the current line. |
+| `opts.filetype` | string | Buffer's filetype. |
+| `opts.range` | `{start,end}` | Line range. Present only when invoked with a range. |
+| `opts.selection` | string | `\n`-joined text of the range. Present only when invoked with a range. |
+
+Functions read whatever subset they care about — none of the keys are required.
+
+#### Writing selection-aware functions
+
+When you generate a function that should operate on the visual selection, describe the convention in `__description` so the LLM knows which keys to read:
+
+```lua
+demand("default").summarize {
+  __description = [[
+    Read opts.selection. Call require('luai.agent').call { prompt = "Summarize in 2 sentences:\n" .. opts.selection } and replace lines [opts.range[1], opts.range[2]] in opts.bufnr with the response via vim.api.nvim_buf_set_lines.
+  ]],
+}
+```
+
+After generation, invoke with `:'<,'>LuaiRun summarize` from visual mode. The function gets `opts.selection` + `opts.range` + `opts.bufnr` automatically.
+
+The `agent.ask_user(question, choices?)` helper from the `agent` module is the right tool when a function needs follow-up confirmation from the user mid-execution.

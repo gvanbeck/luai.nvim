@@ -679,10 +679,14 @@ M.run = function(name, ctx)
 
   local opts = require("luai.context").build_opts(ctx)
   local mod = require(module)
-  if type(mod[fn]) ~= "function" then
+  local fn_val = mod[fn]
+  -- Plain function OR callable table (setmetatable-wrapped luai file).
+  local callable = type(fn_val) == "function"
+    or (type(fn_val) == "table" and getmetatable(fn_val) and getmetatable(fn_val).__call)
+  if not callable then
     error(string.format("[luai] function not found: %s.%s", module, fn))
   end
-  mod[fn](opts)
+  fn_val(opts)
 end
 
 ---@param arglead string

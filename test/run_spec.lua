@@ -60,6 +60,21 @@ do
   print "PASS: run raises clear error on missing function"
 end
 
+-- Test: callable tables (setmetatable + __call) are invoked correctly.
+-- This is the on-disk file format luai produces, so M.run must accept them.
+do
+  local invoked_with
+  local function_object = setmetatable({}, {
+    __call = function(_self, opts) invoked_with = opts end,
+  })
+  package.loaded["luai_user.default"] = { wrapped_fn = function_object }
+
+  luai.run("wrapped_fn", {})
+  assert(invoked_with ~= nil, "callable table was invoked")
+  assert(type(invoked_with.bufnr) == "number", "opts forwarded to callable table")
+  print "PASS: run accepts callable tables (luai file-wrapper format)"
+end
+
 -- Test: range_present is forwarded to context.build_opts (i.e., opts.range gets set).
 do
   local captured_opts

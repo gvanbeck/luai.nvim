@@ -317,3 +317,29 @@ do
   assert(type(captured_on_complete) == "function", "vim.system called in async form (3rd arg)")
   print "PASS: cli async with __on_chunk"
 end
+
+-- Test: when vim.wait times out, sys:kill is called and an error is raised.
+do
+  vim.fn.executable = function(_) return 1 end
+  local kill_called = false
+  vim.system = function(_, _, _on_complete)
+    -- Never call on_complete so vim.wait will time out
+    return { kill = function(_sig) kill_called = true end }
+  end
+
+  -- Monkey-patch vim.wait to return false (timeout) immediately for the test.
+  local original_wait = vim.wait
+  vim.wait = function(_timeout_ms, _predicate, _interval)
+    return false
+  end
+
+  local p = providers.cli { name = "slow", cmd = { "x" } }
+  local ok, err = pcall(p, "", { __on_chunk = function() end })
+
+  vim.wait = original_wait
+
+  assert(not ok)
+  assert(err:match "slow: generation timed out", "error mentions timeout: " .. tostring(err))
+  assert(kill_called, "sys:kill should have been called")
+  print "PASS: cli async timeout kills child"
+end

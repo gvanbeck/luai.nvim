@@ -2,6 +2,40 @@
 
 Generate, Demand, and Improve Lua Functions on the fly.
 
+## Installation
+
+### lazy.nvim
+
+```lua
+{
+  "gvanbeck/luai.nvim",
+  cmd = { "LuaiGenerate", "LuaiImprove", "LuaiRun" },
+  dependencies = {
+    -- Optional, only required for `:Telescope luai`.
+    "nvim-telescope/telescope.nvim",
+    "nvim-lua/plenary.nvim",
+  },
+  config = function()
+    local providers = require "luai.providers"
+    require("luai").setup {
+      providers = {
+        default = providers.claude_code { model = "sonnet" },
+      },
+      default_provider = "default",
+    }
+    -- Optional: register the Telescope picker.
+    pcall(function() require("telescope").load_extension "luai" end)
+  end,
+}
+```
+
+### Requirements
+
+- **Neovim 0.10+** — uses `vim.system` (async + sync), `vim.uv`, `vim.fs.dir`, `vim.api.nvim_get_runtime_file`.
+- **At least one CLI agent on `$PATH`**: `claude` (Claude Code) for `providers.claude_code`, `agent` (Cursor Agent) for `providers.cursor_agent`, or any other CLI you wrap via `providers.cli`.
+- **Optional CLIs**: `stylua` for auto-formatting generated files (luai skips formatting silently when absent); `jq` for pretty-printed `history` JSON inside generated files (compact JSON otherwise).
+- **Optional plugins**: `telescope.nvim` + `plenary.nvim` for `:Telescope luai`. luai works without them; only the picker requires Telescope.
+
 ## Setup
 
 `luai.nvim` no longer talks to any single CLI agent. You configure one or more **providers** in `setup{}`, give one a default key, and `luai` will dispatch generation through them.
@@ -143,59 +177,68 @@ After migration the picker and `M.generate.<name>` resolve normally and your fun
 
 ### `demand`
 
+`demand` is `require` for functions that may not exist yet — give it a module name, access any function on it, and luai generates it on the fly if the file isn't on disk. Subsequent calls `require` the stored file like normal Lua.
+
 ```lua
--- Load demand into the scope.
 local demand = require("luai").demand
 
--- Demand is like `require` - just give it a module name
--- (must have a base module somewhere with a shared name)
---
--- If you have already demanded this function before, it will
--- re-use the generated function. Otherwise, it will generate
--- a function definition for you on the fly, and then save it.
---
--- NOTE: `demand` automatically executes the code. So if you
--- care about that, you should probably use `generate` first ;)
-local win = demand("custom.utils").create_floating_window {
-    title = "Hello, World!",
-    filetype = "lua"
+local win = demand("utils").create_floating_window {
+  title = "Hello, World!",
+  filetype = "lua",
 }
 ```
 
-This will create a new file wherever you have a `lua/custom` folder somewhere in your runtime path.
-
-The folder structure will look like:
+The module name auto-prefixes with your namespace (default `luai_user`). After the first call, the files land under your user storage:
 
 ```
-lua/custom/utils/init.lua
-lua/custom/utils/create_floating_window.lua
+~/.config/nvim/lua/luai_user/utils/init.lua                  (stub registering "luai_user.utils")
+~/.config/nvim/lua/luai_user/utils/create_floating_window.lua
 ```
 
-Going forward, you can just `require("custom.utils").create_floating_window` if you want! I made it so that
-afterwards, loading it just works as normal with Lua. Or you can delete the file and it will generate something
-fresh next time you `demand` it.
+After generation you can also call `require("luai_user.utils").create_floating_window` directly. Delete the function file to regenerate fresh on the next `demand`.
 
-### `generate`
+**Note**: `demand` automatically EXECUTES the generated code. If you want to review before running, use `:LuaiGenerate` or `M.generate` with `__prompt = "Accept (y/n)?"`.
 
-You can generate functions with a command:
+### `generate` / `:LuaiGenerate`
+
+`:LuaiGenerate` prompts you for a function name + description, streams the LLM's output into a floating window, normalises the result, and asks `Accept (y/n)?` before persisting.
 
 ```vim
 :LuaiGenerate
 ```
 
-This will lead you through several prompts and then generate the code, where you can review it afterwards.
+Programmatic equivalent (also accepts `__provider` / `__model` per-call overrides):
 
-### `improve`
+```lua
+require("luai").generate.my_fn {
+  __description = "Print Hello World",
+  __prompt = "Accept (y/n)? ",  -- omit for silent generation
+}
+```
+
+Files land under your storage's default module:
+
+```
+~/.config/nvim/lua/luai_user/default/<name>.lua
+```
+
+Run the new function with `:LuaiRun <name>` (see below).
+
+### `improve` / `:LuaiImprove`
+
+`:LuaiImprove` opens a `vim.ui.select` picker over all generated modules and functions under your user storage. Pick a module, then a function, then describe what should change. luai regenerates with the previous implementation as context and appends a new history entry — the old versions stay visible inside the file.
 
 ```vim
-" The coolest way to use the command:
 :LuaiImprove
 ```
 
-This will open up a selection window for you to select from
-the generated modules on your runtimepath, then a second selection
-for the generated functions inside that module, and finally it will
-prompt you for what you want improved.
+Programmatic equivalent:
+
+```lua
+require("luai").improve("utils").create_floating_window = "use rounded borders"
+```
+
+The Telescope picker's preview pane (`:Telescope luai`) shows the full file including history, so you can browse the evolution of any function.
 
 ### `agent` (for generated functions that call the LLM themselves)
 
